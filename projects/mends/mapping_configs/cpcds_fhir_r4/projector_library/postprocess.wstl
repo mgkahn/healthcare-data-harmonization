@@ -1,0 +1,60 @@
+def Output_Resource(required item) {
+  var Item : item;
+  var HashID (if item.identifier) : II_HashIdentifier(item.identifier[0].value);
+  var HashID (if ~item.identifier) : II_HashIdentifier(item);
+  var Item.meta.lastUpdated : $CurrentTime("2006-01-02T15:04:05.2112Z", "");
+  if (ID_Reconciliation()) {
+    var Item.id : $Hash(item);
+    var Item.identifier[] : HashID;
+    var Item.extension[] : Build_ReconciledTimestampExtension($CurrentTime("2006-01-02T15:04:05.2112Z", ""));
+  } else {
+    if (~item.id) {
+      var Item.id (if item.identifier) : $Hash(item.identifier[0].value);
+      var Item.id (if ~item.identifier) : $Hash(item);
+    }
+  }
+  $this : Item;
+}
+
+def PostProcess_Resource(required item, DataSource) {
+  var Item : item;
+  var Item.id (if ~item.id) : $Hash(item);
+  var Item.meta.source (if DataSource) : DataSource;
+  $this : Item;
+}
+
+def Build_ReferenceID(resourceType, id) {
+    reference : $StrCat(resourceType, "/", id);
+}
+
+def Get_ReconciledID(Resource) {
+  if (Resource.identifier and $Type(Resource.identifier) = "array") {
+    var ReconciledIdentifier : Resource.identifier[where $.system = "urn:oid:google/reconciliation-id"];
+    $this : ReconciledIdentifier[0].value;
+  } else {
+    var ReconciledIdentifier : Resource.extension[where $.url = "urn:oid:google/reconciliation-id"];
+    $this : ReconciledIdentifier[0].valueId;
+  }
+}
+
+def Build_Reference(Resource) {
+  var ReconciledID : Get_ReconciledID(Resource);
+  if (ID_Reconciliation()) {
+    reference : $StrCat(Resource.resourceType, "/", ReconciledID);
+  } else {
+    reference : $StrCat(Resource.resourceType, "/", Resource.id);
+  }
+}
+
+def Build_BundleEntry(required Resource, Verb, DataSource) {
+  resource : PostProcess_Resource(Resource, DataSource);
+  request.method : Verb;
+  request.url : $StrCat(Resource.resourceType, "/", dest resource.id);
+}
+
+def Output_Transaction(Output) {
+  var Resources: $Unique(Output.Resources)
+  resourceType : "Bundle";
+  type : "transaction";
+  entry[] : Build_BundleEntry(Resources[], "PUT", Output.__data_source__);
+}

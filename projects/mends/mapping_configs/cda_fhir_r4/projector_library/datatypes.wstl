@@ -1,0 +1,607 @@
+// Description: Constructs a Reconciled ID as an extension; due to lack of identifier attribute in Provenance Resource: https://www.hl7.org/fhir/provenance.html
+//
+// Argument(s):
+//   Resource Hash ID
+//
+// Output(s):
+//   ReconciledID
+//
+def Build_ReconciledIDExtension(ID) {
+  url : "urn:oid:google/reconciliation-id";
+  valueId : ID;
+}
+
+// Description: Constructs an Address datatype
+//
+// Argument(s):
+//   AD datatype
+//
+// Output(s):
+//   Address datatype: https://www.hl7.org/fhir/datatypes.html#Address
+//
+def AD_Address(required AD) {
+  use (if AD.use = "HP"): "home";
+  line[] : AD.streetAddressLine[];
+  city : AD.city[0];
+  state : AD.state[0];
+  postalCode : AD.postalCode[0];
+  var Country : AD.country[]
+  country : Country[0];
+}
+
+// Description: Checks whether a TS datatype is an interval
+//
+// Argument(s):
+//   TS datatype
+//
+// Output(s):
+//   Boolean
+//
+def IsInterval (required TS) {
+  if ($Type(TS) = "container") {
+    if (TS.value) {
+      $this : false;
+    } else {
+      $this : true;
+    }
+  }
+}
+
+// Description: Constructs a Location resource
+//
+// Argument(s):
+//   AD datatype
+//
+// Output(s):
+//   Location: https://www.hl7.org/fhir/location.html
+//
+def AD_Location(required AD) {
+  resourceType : "Location";
+  // Fixed value to ensure US-Core validation https://www.hl7.org/fhir/us/core/StructureDefinition-us-core-location-definitions.html#Location.name
+  name : "unknown";
+  address : AD_Address(AD);
+}
+
+// Description: Constructs a ContactPoint datatype
+//
+// Argument(s):
+//   TEL datatype
+//
+// Output(s):
+//   ContactPoint datatype: https://www.hl7.org/fhir/datatypes.html#ContactPoint
+//
+def TEL_ContactPoint(required TEL) {
+  system : "phone";
+  value : TEL.value
+}
+
+// Description: Constructs an Organization resource
+//
+// Argument(s):
+//   ORG datatype
+//
+// Output(s):
+//   Organization: https://www.hl7.org/fhir/organization.html
+//
+def ORG_Organization(ORG) {
+  resourceType : "Organization";
+  if (ORG.id) {
+    identifier[] :  II_Identifier(ORG.id[], "Organization");
+  } else {
+    // Fixed value to ensure US-Core validation https://www.hl7.org/fhir/us/core/StructureDefinition-us-core-organization-definitions.html#Organization.identifier
+    identifier[0].value : "unkown";
+    identifier[0].system : "http://hl7.org/fhir/sid/us-npi";
+  }
+  if (ORG.name) {
+    var Name : ORG.name[where $Type($) ~= "container"]
+    name : Name[0];
+  } else {
+    // Fixed-value to ensure fhirpath-constraint-violation-ContainedResource.ofType(Bundle).entry.resource.ofType(Organization): "(identifier.count() + name.count()) > 0"
+    name : "unknown";
+  }
+  // Fixed value to ensure US-Core validation https://www.hl7.org/fhir/us/core/StructureDefinition-us-core-organization-definitions.html#Organization.active
+  active : true;
+  telecom[] : TEL_ContactPoint(ORG.telecom[]);
+  address[] : AD_Address(ORG.addr[]);
+}
+
+// Description: Constructs a default Organization resource
+//
+// Argument(s):
+//
+// Output(s):
+//   Organization: https://www.hl7.org/fhir/organization.html
+//
+def Build_Organization(required OrgName) {
+  resourceType : "Organization";
+  // Fixed-value to ensure fhirpath-constraint-violation-ContainedResource.ofType(Bundle).entry.resource.ofType(Organization): "(identifier.count() + name.count()) > 0"
+  name : OrgName;
+  // Fixed value to ensure US-Core validation https://www.hl7.org/fhir/us/core/StructureDefinition-us-core-organization-definitions.html#Organization.active
+  active : true;
+}
+
+// Description: Constructs an Organization resource
+//
+// Argument(s):
+//   ORG datatype
+//
+// Output(s):
+//   Organization: https://www.hl7.org/fhir/organization.html
+//
+def ORG_CustodianOrganization(required ORG) {
+  resourceType : "Organization"
+  identifier[] :  II_Identifier(ORG.id[], "Organization")
+  name (if $Type(ORG.name) ~= "container") : ORG.name;
+  // Fixed-value to ensure fhirpath-constraint-violation-ContainedResource.ofType(Bundle).entry.resource.ofType(Organization): "(identifier.count() + name.count()) > 0"
+  name (if ~ORG.name) : "unknown";
+  // Fixed value to ensure US-Core validation https://www.hl7.org/fhir/us/core/StructureDefinition-us-core-organization-definitions.html#Organization.active
+  active : true;
+  telecom[] : TEL_ContactPoint(ORG.telecom)
+  address[] : AD_Address(ORG.addr)
+}
+
+// Description: Constructs an Identifier datatype
+//
+// Argument(s):
+//   II datatype
+//
+// Output(s):
+//   Identifier datatype: https://www.hl7.org/fhir/datatypes.html#Identifier
+//
+def II_Identifier(required II, ResourceType) {
+  if (II.extension) {
+    value : II.extension;
+    system (if II.'root'): $StrCat("urn:oid:", II.'root');
+    if (Reconciliation_Match(ResourceType, II.'root') and ID_Reconciliation()) {
+      type.coding[0].code: "match"
+      type.coding[0].system: "urn:oid:google/reconciliation-id";
+    }
+  }
+}
+
+// Description: Constructs an Hash Identifier datatype
+//
+// Argument(s):
+//   II datatype
+//
+// Output(s):
+//   Identifier datatype: https://www.hl7.org/fhir/datatypes.html#Identifier
+//
+def II_HashIdentifier(required II) {
+  value : $Hash(II);
+  system : $StrCat("urn:oid:google/reconciliation-id");
+}
+
+// Description: Constructs a HumanName datatype
+//
+// Argument(s):
+//   PN datatype
+//
+// Output(s):
+//   HumanName datatype: https://www.hl7.org/fhir/datatypes.html#HumanName
+//
+def PN_HumanName(required PN) {
+  use : "usual";
+  family : PARSE_Name(PN.family[0]);
+  given[] : PARSE_Name(PN.given[]);
+  suffix[] : PARSE_Name(PN.suffix[]);
+}
+
+// Description: Parse Name datatype
+//
+// Argument(s):
+//   Name datatype
+//
+// Output(s):
+//   Name string: https://www.hl7.org/fhir/datatypes.html#string
+//
+def PARSE_Name(required Name) {
+  if ($Type(Name) = "container") {
+    $this : Name.text;
+  } else {
+    $this : Name;
+  }
+}
+
+// Description: Constructs a CodeableConcept datatype
+//
+// Argument(s):
+//   CD datatype
+//
+// Output(s):
+//   CodeableConcept datatype: https://www.hl7.org/fhir/datatypes.html#CodeableConcept
+//
+def CD_CodeableConcept(required CD) {
+  coding[0].system (if CD.codeSystem): $StrCat("urn:oid:", CD.codeSystem);
+  coding[0].code : CD.code
+  coding[0].display : CD.displayName
+}
+
+// Description: Constructs a Coding datatype
+//
+// Argument(s):
+//   CD datatype
+//
+// Output(s):
+//   Coding datatype: https://www.hl7.org/fhir/datatypes.html#Coding
+//
+def CD_Coding(required CD) {
+  system (if CD.codeSystem) : $StrCat("urn:oid:", CD.codeSystem);
+  code : CD.code
+  display : CD.displayName
+}
+
+// Description: Constructs a Communication datatype
+//
+// Argument(s):
+//   Language datatype
+//
+// Output(s):
+//   Communication datatype: https://www.hl7.org/fhir/patient-definitions.html#Patient.communication
+//
+def Build_Communication(required Language) {
+  language : CD_CodeableConcept(Language.languageCode);
+  preferred : Language.preferenceInd.value;
+}
+
+// Description: Constructs a Contact datatype
+//
+// Argument(s):
+//   Guardian datatype
+//
+// Output(s):
+//   Contact datatype: https://www.hl7.org/fhir/patient-definitions.html#Patient.contact
+//
+def Guardian_Contact(required Guardian) {
+  relationship[] : CD_CodeableConcept(Guardian.code);
+  telecom[] : TEL_ContactPoint(Guardian.telecom[]);
+  address : AD_Address(Guardian.addr[0]);
+  name : PN_HumanName(Guardian.guardianPerson.name[0]);
+}
+
+// Description: Constructs a Practitioner resource
+//
+// Argument(s):
+//   PR datatype
+//
+// Output(s):
+//   Practitioner: https://www.hl7.org/fhir/practitioner.html
+//
+def Person_Practitioner(PR, ID) {
+  if (ID){
+    identifier[]: II_Identifier(ID[], "Practitioner");
+  } else {
+    // Fixed value to ensure US-Core validation https://www.hl7.org/fhir/us/core/StructureDefinition-us-core-practitioner-definitions.html#Practitioner.identifier
+    identifier[0].value : "unknown";
+    identifier[0].system : "http://hl7.org/fhir/sid/us-npi";
+  }
+  resourceType: "Practitioner";
+  if (PR.name) {
+    name[]: PN_HumanName(PR.name[]);
+  } else {
+    // Fixed value to ensure US-Core validation https://www.hl7.org/fhir/us/core/StructureDefinition-us-core-practitioner-definitions.html#Practitioner.name.family
+    name[0].family : "unkown";
+  }
+}
+
+// Description: Constructs a default Practitioner resource
+//
+// Argument(s):
+//
+// Output(s):
+//   Practitioner: https://www.hl7.org/fhir/practitioner.html
+//
+def Build_Practitioner() {
+  // Fixed value to ensure US-Core validation https://www.hl7.org/fhir/us/core/StructureDefinition-us-core-practitioner-definitions.html#Practitioner.identifier
+  identifier[0].value : "unkown";
+  identifier[0].system : "http://hl7.org/fhir/sid/us-npi";
+  resourceType: "Practitioner";
+  // Fixed value to ensure US-Core validation https://www.hl7.org/fhir/us/core/StructureDefinition-us-core-practitioner-definitions.html#Practitioner.name.family
+  name[0].family : "unkown";
+}
+
+// Description: Constructs a Quantity datatype
+//
+// Argument(s):
+//   PQ datatype
+//
+// Output(s):
+//   Quantity datatype: https://www.hl7.org/fhir/datatypes.html#SimpleQuantity
+//
+def PQ_Quantity(required PQ) {
+  value (if PQ.value) : $ParseFloat(PQ.value);
+  unit : PQ.unit;
+}
+
+// Description: Constructs a UCUM Age datatype
+//
+// Argument(s):
+//   PQ datatype
+//
+// Output(s):
+//   UCUM Age datatype: https://www.hl7.org/fhir/datatypes.html#Age
+//
+def PQ_UCUM(required PQ){
+  value : $ParseFloat(PQ.value);
+  code : PQ.unit;
+  unit: "yr";
+  system: "http://unitsofmeasure.org";
+}
+
+// Description: Constructs a FamilyMemberHistory.condition datatype
+//
+// Argument(s):
+//   Observation datatype
+//
+// Output(s):
+//   FamilyMemberHistory.condition datatype: https://www.hl7.org/fhir/familymemberhistory-definitions.html#FamilyMemberHistory.condition
+//
+def Observation_ConditionDataType(required Observation) {
+  if (Observation.value[0].'type' = "CD" and Observation.value[0].code) {
+    code (if Observation.value[0].'type' = "CD"): CD_CodeableConcept(Observation.value[0]);
+  } else {
+    code.coding[0].code : "unknown";
+  }
+  // templateId = 2.16.840.1.113883.10.20.22.4.31 corresponds to an age observation
+  var AgeObservation : Observation.entryRelationship[*].observation[where templateIdHasRoot($.templateId, "2.16.840.1.113883.10.20.22.4.31")];
+  onsetAge : PQ_UCUM(AgeObservation[0].value[0]);
+  // templateId = 2.16.840.1.113883.10.20.22.4.47 corresponds to an death observation
+  var DeathObservation : Observation.entryRelationship[*].observation[where templateIdHasRoot($.templateId, "2.16.840.1.113883.10.20.22.4.47")];
+  if ($ListLen(DeathObservation) > 0) {
+    outcome : CD_CodeableConcept(DeathObservation[0].value[0]);
+    contributedToDeath : true;
+  } else {
+    contributedToDeath : false;
+  }
+}
+
+// Description: Constructs a Medication resource
+//
+// Argument(s):
+//   ManufacturedProduct datatype
+//   Timestamp: Resource creation timestamp https://www.hl7.org/fhir/datatypes.html#instant
+//
+// Output(s):
+//   Medication: https://www.hl7.org/fhir/medication.html
+//
+def ManufacturedProduct_Medication(required ManufacturedProduct, Timestamp) {
+  resourceType: "Medication";
+  identifier[] : II_Identifier(ManufacturedProduct.id[], "Medication");
+  code : CD_CodeableConcept(ManufacturedProduct.manufacturedMaterial.code);
+  ingredient[].itemCodeableConcept : CD_CodeableConcept[](ManufacturedProduct.manufacturedMaterial.code.translation[]);
+  manufacturer : Build_Reference(Output_Resource(ORG_Organization(ManufacturedProduct.manufacturerOrganization), Timestamp));
+}
+
+// Description: Constructs a MedicationDispense resource
+//
+// Argument(s):
+//   Supply datatype
+//   Patient Resource already constructed through PatientRole_Patient Projector: https://www.hl7.org/fhir/patient.html
+//   Timestamp: Resource creation timestamp https://www.hl7.org/fhir/datatypes.html#instant
+//
+// Output(s):
+//   MedicationDispense: https://www.hl7.org/fhir/medicationdispense.html
+//
+def Supply_MedicationDispense(required Supply, Patient, Timestamp) {
+  resourceType: "MedicationDispense";
+  identifier[] : II_Identifier(Supply.id[], "MedicationDispense");
+  status : Convert_TerminologyCode(Supply.statusCode.code, "SupplyStatusCode");
+  type : CD_CodeableConcept(Supply.code);
+  // templateId = 2.16.840.1.113883.10.20.22.4.23 corresponds to Medication Information
+  if (templateIdHasRoot(Supply.product.manufacturedProduct.templateId, "2.16.840.1.113883.10.20.22.4.23")) {
+    medicationReference : Build_Reference(Output_Resource(ManufacturedProduct_Medication(Supply.product.manufacturedProduct, Timestamp), Timestamp));
+  }
+  performer[].actor : Build_Reference[](Output_Resource[](AssignedEntity_PractitionerRole[](Supply.performer[*].assignedEntity[], Timestamp), Timestamp));
+  quantity : PQ_Quantity(Supply.quantity);
+  if (~IsInterval(Supply.effectiveTime[0])) {
+    whenPrepared : Convert_DateTime(Supply.effectiveTime[0].value);
+    whenHandedOver : Convert_DateTime(Supply.effectiveTime[0].value);
+  }
+  dosageInstruction[0].doseAndRate[0].doseQuantity : PQ_Quantity(Supply.quantity);
+}
+
+// Description: Constructs a ReferenceRange datatype
+//
+// Argument(s):
+//   ObservationRange datatype
+//
+// Output(s):
+//   Observation.referenceRange: https://www.hl7.org/fhir/observation-definitions.html#Observation.referenceRange
+//
+def ObservationRange_ReferenceRange(ObservationRange) {
+  type : CD_CodeableConcept(ObservationRange.interpretationCode);
+  text : ObservationRange.text;
+  low : PQ_Quantity(ObservationRange.value.low);
+  high : PQ_Quantity(ObservationRange.value.high);
+}
+
+// Description: Constructs a Composition.attester datatype
+//
+// Argument(s):
+//   Attester datatype
+//   mode: string
+//
+// Output(s):
+//   Composition.attester: https://www.hl7.org/fhir/composition-definitions.html#Composition.attester
+//
+def Build_Attester(required Attester, Mode) {
+  mode : Mode;
+  party : Build_Reference(Attester);
+}
+
+// Description: Constructs a Composition.section datatype
+//
+// Argument(s):
+//   Section datatype
+//   Resource: already constructed through Process_Document Projector
+//   Timestamp: Resource creation timestamp https://www.hl7.org/fhir/datatypes.html#instant
+//
+// Output(s):
+//   Composition.section: https://www.hl7.org/fhir/composition-definitions.html#Composition.section
+//
+def Build_Section(required Section, required Resource, Timestamp) {
+  title : Section.title;
+  code : CD_CodeableConcept(Section.code);
+  entry[] : Build_Reference(Output_Resource[](Resource[], Timestamp));
+  //TODO:  Add text also ...
+}
+
+// Description: Constructs a Location resource
+//
+// Argument(s):
+//   ParticipantRole datatype
+//
+// Output(s):
+//   Location: https://www.hl7.org/fhir/location.html
+//
+def ParticipantRole_Location(ParticipantRole) {
+  resourceType: "Location";
+  identifier[] : II_Identifier(ParticipantRole.id[], "Location");
+  type[] : CD_CodeableConcept(ParticipantRole.code);
+  if (ParticipantRole.playingEntity.name[0]) {
+    name : ParticipantRole.playingEntity.name[0];
+  } else {
+    // Fixed value to ensure US-Core validation https://www.hl7.org/fhir/us/core/StructureDefinition-us-core-location-definitions.html#Location.name
+    name : "unknown";
+  }
+  telecom[] : TEL_ContactPoint(ParticipantRole.telecom[]);
+  address : AD_Address(ParticipantRole.addr[0]);
+}
+
+// Description: Checks whether a TypeCode matches to a desired Code
+//
+// Argument(s):
+//   TypeCode: string
+//   Code: string
+//
+// Output(s):
+//   Boolean
+//
+def hasCode(TypeCode, Code) {
+  $this : TypeCode = Code;
+}
+
+// Description: Checks whether a templateId matches to a desired value
+//
+// Argument(s):
+//   templateId: array
+//   value: string
+//
+// Output(s):
+//   Boolean
+//
+def templateIdHasRoot(templateId, value) {
+   $this: $ListLen(templateId[where $.'root' = value]) > 0
+}
+
+// Description: Constructs a Immunization.reaction datatype
+//
+// Argument(s):
+//   Observation datatype
+//   Patient Resource already constructed through PatientRole_Patient Projector: https://www.hl7.org/fhir/patient.html
+//   Timestamp: Resource creation timestamp https://www.hl7.org/fhir/datatypes.html#instant
+//
+// Output(s):
+//   Immunization.reaction: https://www.hl7.org/fhir/immunization-definitions.html#Immunization.reaction
+//
+def Build_ImmunizationReaction(required Observation, Patient, Timestamp) {
+  detail : Build_Reference(Output_Resource(Observation_Observation(Observation, Patient, "laboratory", Timestamp), Timestamp));
+  if (IsInterval(Observation.effectiveTime)) {
+    date : Convert_DateTime(Observation.effectiveTime.low.value);
+  } else {
+    date : Convert_DateTime(Observation.effectiveTime.value);
+  }
+}
+
+// Description: Constructs a AllergyIntolerance.reaction datatype
+//
+// Argument(s):
+//   Substance datatype: already constructed through Act_AllergyIntolerance Projector
+//   Manifestation: already constructed through Act_AllergyIntolerance Projector
+//   Onset: already constructed through Act_AllergyIntolerance Projector
+//   Severity: already constructed through Act_AllergyIntolerance Projector
+//
+// Output(s):
+//   AllergyIntolerance.reaction: https://www.hl7.org/fhir/allergyintolerance-definitions.html#AllergyIntolerance.reaction
+//
+def Build_AllergyReaction(Substance, required Manifestation, Onset, Severity) {
+  substance : CD_CodeableConcept(Substance);
+  if (Manifestation.code) {
+    manifestation[] : CD_CodeableConcept(Manifestation);
+  } else {
+    manifestation[].coding[0].code : "unknown";
+  }
+  onset : Convert_DateTime(Onset.value);
+  severity (if Severity.code) : Convert_TerminologyCode(Severity.code, "SeverityCode");
+}
+
+// Description: Constructs a Observation.component datatype
+//
+// Argument(s):
+//   Code datatype: already constructed through Observation_Observation Projector
+//   Value: already constructed through Observation_Observation Projector
+//
+// Output(s):
+//   Observation.component: https://www.hl7.org/fhir/observation-definitions.html#Observation.component
+//
+def Build_Component(required Code, required Value) {
+  if (Code.code) {
+    code : CD_CodeableConcept(Code);
+  } else {
+    code.coding[0].code : "unknown";
+  }
+  valueCodeableConcept (if Value.'type' = "CD") : CD_CodeableConcept(Value);
+  valueQuantity (if Value.'type' = "PQ" and Value.value) : PQ_Quantity(Value);
+}
+
+// Description: Constructs a Bundle identifier and timestamp datatype
+//
+// Argument(s):
+//   II Datatype: http://ccda.art-decor.org/ccda-html-20150727T182455/rules.html
+//   Time Datatype: http://ccda.art-decor.org/ccda-html-20150727T182455/rules.html
+//
+// Output(s):
+//   Bundle: https://www.hl7.org/fhir/bundle.html
+//
+def ClinicalDocument_Bundle(II, Time) {
+  if (~II.extension) {
+    identifier.value : "unknown";
+  } else {
+    identifier.value : II.extension;
+  }
+  identifier.system (if II.'root') : $StrCat("urn:oid:", II.'root');
+  timestamp : Convert_Instant(Time);
+}
+
+// Description: Constructs a DocumentReference Resource based on Document URL
+//
+// Argument(s):
+//   URL Datatype: https://www.hl7.org/fhir/datatypes.html#Attachment
+//
+// Output(s):
+//   DocumentReference: https://www.hl7.org/fhir/documentreference.html
+//
+def Build_DocumentReference(required URL, Patient) {
+  resourceType : "DocumentReference";
+  content[0].attachment.url : URL;
+  content[0].attachment.contentType : "unknown";
+  status : "current";
+  type.coding[0].code : "UNK";
+  type.coding[0].system : "http://terminology.hl7.org/CodeSystem/v3-NullFlavor";
+  category[0].coding[0].code : "clinical-note";
+  category[0].coding[0].system : "http://hl7.org/fhir/us/core/CodeSystem/us-core-documentreference-category";
+  subject : Build_Reference(Patient);
+}
+
+// Description: Constructs a Resource creation timestamp extension to support FHIR reconciliation
+//
+// Argument(s):
+//   Timestamp: https://www.hl7.org/fhir/extensibility.html
+//
+// Output(s):
+//   ReconciledTimestampExtension
+//
+def Build_ReconciledTimestampExtension(TS) {
+  url : "urn:oid:google/reconciliation-create-timestamp";
+  valueInstant : TS;
+}

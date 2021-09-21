@@ -1,0 +1,81 @@
+def Output_Resource(required item, required Timestamp) {
+  var Item : item;
+  var Item.id (if ~item.id) : $Hash(item);
+  if (ID_Reconciliation()) {
+    if (item.resourceType = "Provenance" or item.resourceType = "Composition") {
+      // Constructs a Reconciled ID as an extension; due to lack of identifier attribute in Provenance Resource: https://www.hl7.org/fhir/provenance.html
+      if (item.identifier) {
+        var Item.extension[] : Build_ReconciledIDExtension($Hash(item.identifier));
+      } else {
+        var Item.extension[] : Build_ReconciledIDExtension($Hash(item));
+      }
+    } else {
+      if (item.identifier) {
+        var Item.identifier[] : II_HashIdentifier(item.identifier);
+      } else {
+        var Item.identifier[] : II_HashIdentifier(item);
+      }
+    }
+    // Timestamp: Resource creation timestamp https://www.hl7.org/fhir/datatypes.html#instant
+    var Item.extension[] : Build_ReconciledTimestampExtension(Timestamp);
+  }
+  out Resources : Item;
+  $this : Item;
+}
+
+def PostProcess_Resource(required item, DataSource) {
+  var Item : item;
+  var Item.id (if ~item.id): $Hash(item);
+  var Item.meta.source (if DataSource) : DataSource;
+  $this : Item;
+}
+
+def Get_ReconciledID(Resource) {
+  if (Resource.identifier and $Type(Resource.identifier) = "array") {
+    var ReconciledIdentifier : Resource.identifier[where $.system = "urn:oid:google/reconciliation-id"];
+    $this : ReconciledIdentifier[0].value;
+  } else {
+    var ReconciledIdentifier : Resource.extension[where $.url = "urn:oid:google/reconciliation-id"];
+    $this : ReconciledIdentifier[0].valueId;
+  }
+}
+
+def Build_Reference(required Resource) {
+  var ReconciledID : Get_ReconciledID(Resource);
+  if (ID_Reconciliation()) {
+    reference : $StrCat(Resource.resourceType, "/", ReconciledID);
+  } else {
+    reference : $StrCat(Resource.resourceType, "/", Resource.id);
+  }
+}
+
+def Build_BundleEntry(required Resource, DataSource) {
+  resource : PostProcess_Resource(Resource, DataSource);
+}
+
+def Build_TransactionBundleEntry(required Resource, Verb, DataSource) {
+  resource : PostProcess_Resource(Resource, DataSource);
+  request.method : Verb;
+  request.url : $StrCat(Resource.resourceType, "/", dest resource.id);
+}
+
+def Output_Document(required Output) {
+  var Resources: $Unique(Output.Resources);
+  resourceType : "Bundle";
+  identifier : Output.Bundle.identifier;
+  timestamp : Output.Bundle.timestamp;
+  type : "document";
+  entry[] : Build_BundleEntry(Resources[where $.resourceType = "Composition"][], Output.__data_source__);
+  entry[] : Build_BundleEntry(Resources[where $.resourceType ~= "Composition"][], Output.__data_source__);
+}
+
+def Output_Bundle(required Output) {
+  var Resources: $Unique(Output.Resources);
+  resourceType : "Bundle";
+  identifier : Output.Bundle.identifier;
+  timestamp : Output.Bundle.timestamp;
+  type : "transaction";
+  entry[] : Build_TransactionBundleEntry(Output_Document(Output), "PUT", Output.__data_source__);
+  entry[] : Build_TransactionBundleEntry(Resources[where $.resourceType = "Composition"][], "PUT", Output.__data_source__);
+  entry[] : Build_TransactionBundleEntry(Resources[where $.resourceType ~= "Composition"][], "PUT", Output.__data_source__);
+}
