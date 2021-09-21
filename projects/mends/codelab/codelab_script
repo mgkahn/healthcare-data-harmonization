@@ -1,0 +1,8 @@
+# go run must be run in mapping_engine/main 
+pushd $DH_ROOT/mapping_engine/main
+go run . -input_file_spec=$MENDS_ROOT/codelab/codelab.json \
+        -output_dir=$MENDS_ROOT/codelab/ \
+        -mapping_file_spec=$MENDS_ROOT/codelab/codelab.wstl
+popd
+
+

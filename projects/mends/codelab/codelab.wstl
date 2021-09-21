@@ -1,0 +1,51 @@
+// Exercise 1
+// Planet[0]: BodyName_BodyType_BodyInfo("Earth", "Planet")
+// Planet[1]: BodyName_BodyType_BodyInfo("Mars","WierdPlanet")
+// Planet[2]: BodyName_BodyType_BodyInfo("Jupiter", "BigPlanet")
+// Moon[0]: BodyName_BodyType_BodyInfo("Luna","JustAMoon")
+
+// def BodyName_BodyType_BodyInfo(bodyName,bodyType) {
+//     name: $ToUpper(bodyName)
+//     type: bodyType
+// }
+
+
+// Exercise 2
+// Star: SunName_Planets("Sol", $ListOf("Mercury","Venus","Earth"))
+// 
+// def SunName_Planets(sunName, planets) {
+//   name : $ToUpper(sunName)
+//    planets: planets
+// }
+
+//Exercise 3: $this
+// Primitive: Num_DoubleNum(10)
+//
+// def Num_DoubleNum(num) {
+//    $this: $Mul(2,num)
+// }
+
+// Exercise 4 -- How fields are merged is not entirely intuitive
+Primitive: Num_DoubleNum(10)
+Merged: Colour_Colour_MergedColours("red", "blue")
+
+def Num_DoubleNum(num) {
+  $this: $Mul(2, num)
+}
+
+def Colour_Colour_MergedColours(col1, col2) {
+  $this: Colour_Col1(col1)
+
+  // Merge the result of Colour_Col2 with $this.
+  $this: Colour_Col2(col2)
+}
+
+def Colour_Col1(col) {
+  colour.first: col
+  colours[0]: col
+}
+
+def Colour_Col2(col) {
+  colour.second: col
+  colours[0]: col
+}

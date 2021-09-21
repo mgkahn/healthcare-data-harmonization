@@ -1,0 +1,8 @@
+{
+   "ConditionOccurence":{
+      "provider_id":"999999",
+      "npi":"8888888888",
+      "care_site_id":"77777",
+      "provider_source_value":"this is a source value"
+   }
+}

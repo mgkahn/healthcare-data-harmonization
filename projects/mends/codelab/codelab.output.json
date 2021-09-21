@@ -1,0 +1,13 @@
+{
+  "Merged": {
+    "colour": {
+      "first": "red",
+      "second": "blue"
+    },
+    "colours": [
+      "red",
+      "blue"
+    ]
+  },
+  "Primitive": 20
+}
