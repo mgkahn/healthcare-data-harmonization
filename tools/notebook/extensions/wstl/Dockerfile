@@ -60,6 +60,7 @@ RUN mkdir -p $WSTL_INSTALL_DIR/bin && \
 COPY --chown=$GO_USER ./mapping_engine $WSTL_INSTALL_DIR/mapping_engine
 COPY --chown=$GO_USER ./mapping_language $WSTL_INSTALL_DIR/mapping_language
 COPY --chown=$GO_USER ./tools/notebook/extensions/ $WSTL_INSTALL_DIR/tools/notebook/extensions/
+COPY --chown=$GO_USER ./fhir-go /fhir-go
 
 WORKDIR $WSTL_INSTALL_DIR/tools/notebook/extensions/wstl/
 RUN chmod +x ./build_go.sh && \
